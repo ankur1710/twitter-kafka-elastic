@@ -1,6 +1,5 @@
 package com.twitter.kafkaconsumerelastic;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.JsonParser;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -43,28 +42,24 @@ public class KafkaConsumerElasticApplication implements CommandLineRunner {
 		//KafkaConsumer
 		Consumer<String,String> twitterConsumerEs = twitterConsumerKafka.getKafkaConsumer("twitter_tweets");
 
-		while(true){
-			ConsumerRecords<String,String> twitterRecords = twitterConsumerEs.poll(Duration.ofMillis(100));
+		while(true) {
+			ConsumerRecords<String, String> twitterRecords = twitterConsumerEs.poll(Duration.ofMillis(100));
+			logger.info("records received : {}" + twitterRecords.count());
 
-			for (ConsumerRecord<String,String> record : twitterRecords){
-//				logger.info("record key: {} "+record.key());
-//				logger.info("partition : {} " + record.partition()+", and offset {}"+ record.offset());
-
-				//Id
-				//String id = record.topic()+record.partition()+record.partition();
+			for (ConsumerRecord<String, String> record : twitterRecords) {
 				String id = extractTwitterIdfromJson(record.value());
 
 				//insert the details in the elasticSearch
-				IndexRequest indexRequest = new IndexRequest("twitter","tweets",id).source(record.value(), XContentType.JSON);
+				IndexRequest indexRequest = new IndexRequest("twitter", "tweets", id).source(record.value(), XContentType.JSON);
 				IndexResponse indexResponse = esRestClient.index(indexRequest, RequestOptions.DEFAULT);
 				logger.info(indexResponse.getId());
 				Thread.sleep(1000); // this is to introduce a small delay.
 			}
-
+			logger.info("Committing offsets.....");
+			twitterConsumerEs.commitAsync();
+			logger.info("offsets have been committed");
+			Thread.sleep(1000); // this is to introduce a small delay.
 		}
-
-		//close the Client
-		//esRestClient.close();
 	}
 
 	private String extractTwitterIdfromJson(String tweetsJson) {
