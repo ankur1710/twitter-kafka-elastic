@@ -4,8 +4,9 @@ import com.google.gson.JsonParser;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.common.xcontent.XContentType;
@@ -46,14 +47,24 @@ public class KafkaConsumerElasticApplication implements CommandLineRunner {
 			ConsumerRecords<String, String> twitterRecords = twitterConsumerEs.poll(Duration.ofMillis(100));
 			logger.info("records received : {}" + twitterRecords.count());
 
+			BulkRequest bulkRequest = new BulkRequest();
+
 			for (ConsumerRecord<String, String> record : twitterRecords) {
-				String id = extractTwitterIdfromJson(record.value());
+				try {
+					String id = extractTwitterIdfromJson(record.value());
 
 				//insert the details in the elasticSearch
 				IndexRequest indexRequest = new IndexRequest("twitter", "tweets", id).source(record.value(), XContentType.JSON);
-				IndexResponse indexResponse = esRestClient.index(indexRequest, RequestOptions.DEFAULT);
-				logger.info(indexResponse.getId());
-				Thread.sleep(1000); // this is to introduce a small delay.
+				bulkRequest.add(indexRequest);
+//				IndexResponse indexResponse = esRestClient.index(indexRequest, RequestOptions.DEFAULT);
+//				logger.info(indexResponse.getId());
+//				Thread.sleep(1000); // this is to introduce a small delay.
+				BulkResponse bulkResponse = esRestClient.bulk(bulkRequest,RequestOptions.DEFAULT);
+				logger.info("bulkResponse :{} "+bulkResponse.status().name());
+
+				}catch (NullPointerException e){
+					logger.warn("skipping bad data : {} "+ record.value() );
+				}
 			}
 			logger.info("Committing offsets.....");
 			twitterConsumerEs.commitAsync();
